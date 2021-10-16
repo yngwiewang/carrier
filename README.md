@@ -1,6 +1,8 @@
 # Carrier
 A command-line tool similar to Ansible ad-hoc mode, much more efficient, implemented in Go.
 
+Just one line of code to execute shell commands on thousands of hosts parallelly. Get results in real time.
+
 # Overview
 Carrier does:
 1. Executes shell commands on the remote hosts parallelly, record the result of the last execution.
@@ -69,17 +71,22 @@ OK
 ```
 
 # Benchmark
-Here is an approximate benchmark for reference.
+Here is an approximate benchmark for reference. Results are affected by hosts and network environment. According to the scale of concurrency, the CPU of the machine initiating the ssh command also greatly affects performance.
 - shelll command: hostname
-- hosts: 27000 in 2 IDCs more than 1200 kilometers apart
-- cpu usage: exhaust 4 virtual cores(Intel Xeon E7-4830 v4 @ 2.00GHz)
-- memory usage: 1.8G 
-- duration: 2m
----
-- hosts: 1000
-- duration: 2.5s
+- hosts: distributed in 2 IDCs more than 1200 kilometers apart
+
+| Hosts | Duration |
+| ----- | -------- |
+| 1000  | 2.5s     |
+| 5000  | 40s      |
+| 10000 | 70s      |
+| 27000 | 2m       |
+
+Resource consumption of the machine that sending the command to 27000 hosts
+- cpu: exhaust 4 virtual cores(Intel Xeon @ 2.00GHz)
+- mem: 1.8G
 
 # Credits
-- github.com/bramvdbogaerde/go-scp
-- github.com/spf13/cobra
-- github.com/jedib0t/go-pretty/v6/table
+- [github.com/bramvdbogaerde/go-scp](https://github.com/bramvdbogaerde/go-scp)
+- [github.com/spf13/cobra](https://github.com/spf13/cobra)
+- [github.com/jedib0t/go-pretty](https://github.com/jedib0t/go-pretty)
