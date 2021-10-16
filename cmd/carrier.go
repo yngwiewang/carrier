@@ -18,6 +18,7 @@ var (
 	authMode       string
 	executeTimeout time.Duration
 	logOutput      string
+	dryRun         bool
 	succeeded      string
 	src            string
 	dst            string
@@ -52,6 +53,10 @@ var execCmd = &cobra.Command{
 			return errors.New("must specify a shell command to execute")
 		}
 		shellCmd := args[0]
+		if dryRun {
+			fmt.Printf("--------------------------------\n%s\n", shellCmd)
+			return nil
+		}
 		hosts.ExecuteSSH(cfg, shellCmd)
 		hosts.PrintResult()
 		if err = hosts.SaveGob(); err != nil {
@@ -145,6 +150,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&hostsFileName, "inventory", "i", "", "remote host list to read from (default value in config file)")
 	rootCmd.PersistentFlags().StringVarP(&authMode, "auth-mode", "a", "", "remote hosts' ssh authentication mode, could be password or key(default value in config file)")
 	execCmd.Flags().DurationVarP(&executeTimeout, "timeout", "t", 0*time.Second, "timeout to execute remote shell(default value in config file)")
+	execCmd.Flags().BoolVarP(&dryRun, "dry-run", "d", false, "print without executing the shell command, for checking")
 	logsCmd.Flags().StringVarP(&logOutput, "output", "o", "table", "log output format(can be table or csv, default is table)")
 	logsCmd.Flags().StringVarP(&succeeded, "succeeded", "s", "all", "is the execution successful(can be all, true or false, default is all)")
 	hostsCmd.Flags().StringVarP(&succeeded, "succeeded", "s", "all", "is the execution successful(can be all, true or false, default is all)")

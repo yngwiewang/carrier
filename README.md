@@ -18,47 +18,55 @@ Use `carrier -h` for more information about commands.
 
 2. Prepare a list of host, *host* is an example.
 
-3. Execute commands parallelly. Note that multiple statements are separated by semicolons. It is best to test your shell commands on one or two hosts first.
-```
-$ ./carrier sh 'hostname;date'
-192.168.220.120 OK      0.154s
+3. Execute commands parallelly. It is best to check your shell commands by using `--dry-run` and test them on a few hosts first.
+```sh
+$ ./carrier sh "echo -n 'hostname: ';hostname;echo -n 'cpu: ';cat /proc/cpuinfo |grep processor |wc -l;echo -n 'mem: ';cat /proc/meminfo |grep MemTotal |awk '{printf \"%d\n\", \$2/1024/1024}';echo -n 'disk: ';df -m|grep '/dev/'|grep -v tmpfs|awk '{sum+=\$2};END{printf \"%d\", sum/1024}'"
+192.168.220.120 OK      0.104s
 ================================
-kb1
-Wed Sep 15 17:56:59 CST 2021
+hostname: kb1
+cpu: 2
+mem: 3
+disk: 17
 
-192.168.220.102 OK      0.210s
+192.168.220.102 OK      0.146s
 ================================
-docker
-Mon Oct 11 05:49:18 CST 2021
+hostname: docker
+cpu: 2
+mem: 3
+disk: 18
 
-192.168.220.1   Failed  1.002s
+192.168.220.1   Failed  1.003s
 ================================
 dial tcp 192.168.220.1:22: i/o timeout
 ```
 
 4. Check the result of last execution, the format could be table or csv.
-```
+```sh
 $ ./carrier logs
-+-----------------+-----------+------------------------------+----------------------------------------+----------+
-| IP              | SUCCEEDED | RESULT                       | ERROR                                  | DURATION |
-+-----------------+-----------+------------------------------+----------------------------------------+----------+
-| 192.168.220.102 | true      | docker                       |                                        |     0.21 |
-|                 |           | Mon Oct 11 05:49:18 CST 2021 |                                        |          |
-+-----------------+-----------+------------------------------+----------------------------------------+----------+
-| 192.168.220.120 | true      | kb1                          |                                        |    0.154 |
-|                 |           | Wed Sep 15 17:56:59 CST 2021 |                                        |          |
-+-----------------+-----------+------------------------------+----------------------------------------+----------+
-| 192.168.220.1   | false     |                              | dial tcp 192.168.220.1:22: i/o timeout |    1.002 |
-+-----------------+-----------+------------------------------+----------------------------------------+----------+
++-----------------+-----------+------------------+----------------------------------------+----------+
+| IP              | SUCCEEDED | RESULT           | ERROR                                  | DURATION |
++-----------------+-----------+------------------+----------------------------------------+----------+
+| 192.168.220.102 | true      | hostname: docker |                                        |    0.146 |
+|                 |           | cpu: 2           |                                        |          |
+|                 |           | mem: 3           |                                        |          |
+|                 |           | disk: 18         |                                        |          |
++-----------------+-----------+------------------+----------------------------------------+----------+
+| 192.168.220.120 | true      | hostname: kb1    |                                        |    0.104 |
+|                 |           | cpu: 2           |                                        |          |
+|                 |           | mem: 3           |                                        |          |
+|                 |           | disk: 17         |                                        |          |
++-----------------+-----------+------------------+----------------------------------------+----------+
+| 192.168.220.1   | false     |                  | dial tcp 192.168.220.1:22: i/o timeout |    1.003 |
++-----------------+-----------+------------------+----------------------------------------+----------+
 ```
 5. Extract the last successful/Failed hosts, you can redirect the result to a temp file and make further processing.
-```
+```sh
 $ ./carrier hosts -sfalse
 192.168.220.1,22,root,11111
 ```
 
 6. Copy local file to the remote hosts parallelly. In order to avoid mistakes, basename of src and dst must be the same.
-```
+```sh
 $ ./carrier cp -s /mnt/d/abc -d /root/test/abc -m 0644
 192.168.220.120 Failed  0.161s
 ================================

@@ -217,19 +217,6 @@ func sshDialTimeout(network, addr string, config *ssh.ClientConfig, timeout time
 		return nil, err
 	}
 	client := ssh.NewClient(c, chans, reqs)
-
-	// this sends keepalive packets every 2 seconds
-	// there's no useful response from these, so we can just abort if there's an error
-	// go func() {
-	// 	t := time.NewTicker(2 * time.Second)
-	// 	defer t.Stop()
-	// 	for range t.C {
-	// 		_, _, err := client.Conn.SendRequest("keepalive", true, nil)
-	// 		if err != nil {
-	// 			return
-	// 		}
-	// 	}
-	// }()
 	return client, nil
 }
 
@@ -269,7 +256,7 @@ func (h *Host) exec(cfg *config.Config, cmd string) {
 			Timeout:         cfg.ExecuteTimeout,
 		}
 	}
-	// client, err := ssh.Dial("tcp", h.IP+":"+h.Port, config)
+
 	client, err := sshDialTimeout("tcp", h.IP+":"+h.Port, config, cfg.ExecuteTimeout)
 	if err != nil {
 		h.Error = err.Error()
