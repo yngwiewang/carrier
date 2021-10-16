@@ -1,7 +1,7 @@
 # Carrier
 A command-line tool similar to Ansible ad-hoc mode, much more efficient, implemented in Go.
 
-Just one line of code to execute shell commands on thousands of hosts parallelly. Get results in real time.
+Just a binary file, You don't need Python, don't need to install any software or libraries. One line of code to execute shell commands on thousands of hosts parallelly. Get results in real time.
 
 # Overview
 Carrier does:
@@ -18,7 +18,7 @@ Use `carrier -h` for more information about commands.
 
 2. Prepare a list of host, *host* is an example.
 
-3. Execute commands parallelly. Note that multiple commands are separated by semicolons.
+3. Execute commands parallelly. Note that multiple statements are separated by semicolons. It is best to test your shell commands on one or two hosts first.
 ```
 $ ./carrier sh 'hostname;date'
 192.168.220.120 OK      0.154s
