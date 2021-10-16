@@ -1,0 +1,4 @@
+execute_config:
+  hosts_file: hosts
+  auth_mode: key
+  timeout: 1s
