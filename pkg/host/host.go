@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/bramvdbogaerde/go-scp"
-	"github.com/yngwiewang/carrier/common/color"
+	"github.com/yngwiewang/carrier/pkg/color"
 	"github.com/yngwiewang/carrier/pkg/config"
 	"golang.org/x/crypto/ssh"
 )
