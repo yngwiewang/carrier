@@ -44,13 +44,16 @@ func Execute() {
 var execCmd = &cobra.Command{
 	Use:   "sh",
 	Short: "execute shell command on remote hosts",
+	Args: func(cmd *cobra.Command, args []string) error {
+		if len(args) != 1 {
+			return errors.New("must specify only one shell command to execute")
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hosts, err := host.GetHosts(hostsFileName)
 		if err != nil {
 			return err
-		}
-		if len(args) == 0 {
-			return errors.New("must specify a shell command to execute")
 		}
 		shellCmd := args[0]
 		if dryRun {
@@ -157,8 +160,8 @@ func init() {
 	copyCmd.Flags().StringVarP(&src, "src", "s", "", "source file on local host")
 	copyCmd.Flags().StringVarP(&dst, "dst", "d", "", "destination file on remote hosts")
 	copyCmd.Flags().StringVarP(&mask, "mask", "m", "0755", "mask code of destination file(default is 0755)")
-	copyCmd.MarkFlagRequired("source")
-	copyCmd.MarkFlagRequired("destination")
+	_ = copyCmd.MarkFlagRequired("source")
+	_ = copyCmd.MarkFlagRequired("destination")
 
 	cobra.OnInitialize(initConfig)
 	rootCmd.AddCommand(execCmd)
@@ -170,7 +173,7 @@ func init() {
 func initConfig() {
 	cfg, err = config.NewConfig(cfgFile)
 	if err != nil {
-		fmt.Printf("failed to parse config file, err: %v", err)
+		fmt.Printf("failed to parse config file, err: %s", err.Error())
 		os.Exit(1)
 	}
 	if hostsFileName == "" {
