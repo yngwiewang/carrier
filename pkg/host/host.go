@@ -268,19 +268,15 @@ func (h *Host) exec(cfg *config.Config, cmd string) {
 		h.Error = err.Error()
 		return
 	}
-
 	defer session.Close()
-	var res bytes.Buffer
-	session.Stdout = &res
 
-	err = session.Run(cmd)
+	res, err := session.CombinedOutput(cmd)
+	h.Result = strings.TrimSpace(string(res))
 	if err != nil {
-		h.Result = strings.TrimSpace(res.String())
 		h.Error = err.Error()
 		return
 	}
 	h.IsSucceeded = true
-	h.Result = strings.TrimSpace(res.String())
 }
 
 func (h *Host) copy(cfg *config.Config, src, dst, mask string) {
