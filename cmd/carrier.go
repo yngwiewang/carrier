@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -45,8 +46,8 @@ var execCmd = &cobra.Command{
 	Use:   "sh",
 	Short: "execute shell command on remote hosts",
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return errors.New("must specify only one shell command to execute")
+		if len(args) < 1 {
+			return errors.New("must specify the shell command to execute")
 		}
 		return nil
 	},
@@ -55,7 +56,7 @@ var execCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		shellCmd := args[0]
+		shellCmd := strings.Join(args, " ")
 		if dryRun {
 			fmt.Printf("--------------------------------\n%s\n", shellCmd)
 			return nil
