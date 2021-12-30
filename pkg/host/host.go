@@ -158,7 +158,6 @@ func (hosts *Hosts) ExecuteSCP(cfg *config.Config, src, dst, mask string) error 
 
 func (hosts Hosts) PrintResult() {
 	for h := range hosts.HostCh {
-
 		h.print()
 	}
 }
@@ -220,7 +219,7 @@ func sshDialTimeout(network, addr string, config *ssh.ClientConfig, timeout time
 	return client, nil
 }
 
-func (h *Host) exec(cfg *config.Config, cmd string) {
+func getHostSSHConfig(cfg *config.Config, h *Host) (*ssh.ClientConfig, error) {
 	var config *ssh.ClientConfig
 	if cfg.AuthMode == "password" {
 		config = &ssh.ClientConfig{
@@ -234,18 +233,15 @@ func (h *Host) exec(cfg *config.Config, cmd string) {
 	} else {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			h.Error = err.Error()
-			return
+			return nil, err
 		}
 		key, err := ioutil.ReadFile(filepath.Join(homeDir, ".ssh/id_rsa"))
 		if err != nil {
-			h.Error = err.Error()
-			return
+			return nil, err
 		}
 		signer, err := ssh.ParsePrivateKey(key)
 		if err != nil {
-			h.Error = err.Error()
-			return
+			return nil, err
 		}
 		config = &ssh.ClientConfig{
 			User: h.Username,
@@ -256,7 +252,15 @@ func (h *Host) exec(cfg *config.Config, cmd string) {
 			Timeout:         cfg.ExecuteTimeout,
 		}
 	}
+	return config, nil
+}
 
+func (h *Host) exec(cfg *config.Config, cmd string) {
+	config, err := getHostSSHConfig(cfg, h)
+	if err != nil {
+		h.Error = err.Error()
+		return
+	}
 	client, err := sshDialTimeout("tcp", h.IP+":"+h.Port, config, cfg.ExecuteTimeout)
 	if err != nil {
 		h.Error = err.Error()
@@ -280,68 +284,100 @@ func (h *Host) exec(cfg *config.Config, cmd string) {
 }
 
 func (h *Host) copy(cfg *config.Config, src, dst, mask string) {
-	var config *ssh.ClientConfig
-	if cfg.AuthMode == "password" {
-		config = &ssh.ClientConfig{
-			User: h.Username,
-			Auth: []ssh.AuthMethod{
-				ssh.Password(h.Password),
-			},
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-			Timeout:         cfg.ExecuteTimeout,
-		}
-	} else {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			h.Error = err.Error()
-			return
-		}
-		key, err := ioutil.ReadFile(filepath.Join(homeDir, ".ssh/id_rsa"))
-		if err != nil {
-			h.Error = err.Error()
-			return
-		}
-		signer, err := ssh.ParsePrivateKey(key)
-		if err != nil {
-			h.Error = err.Error()
-			return
-		}
-		config = &ssh.ClientConfig{
-			User: h.Username,
-			Auth: []ssh.AuthMethod{
-				ssh.PublicKeys(signer),
-			},
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-			Timeout:         cfg.ExecuteTimeout,
-		}
-	}
-
-	client := scp.NewClient(h.IP+":"+h.Port, config)
-
-	err := client.Connect()
+	fi, err := os.Stat(src)
 	if err != nil {
 		h.Error = err.Error()
 		return
 	}
 
+	var wg sync.WaitGroup
+	switch mode := fi.Mode(); {
+	// scp a file
+	case mode.IsRegular():
+		if filepath.Base(src) != filepath.Base(dst) {
+			h.Error = "basename of src and dst must be the same"
+			return
+		}
+		wg.Add(1)
+		h.copyFile(cfg, &wg, src, dst, mask)
+		return
+		// scp a directory
+	case mode.IsDir():
+		h.exec(cfg, fmt.Sprintf("mkdir -p %s;chmod %s %s", dst, mask, dst))
+		if h.Error != "" {
+			return
+		}
+		h.copyDir(cfg, &wg, src, dst, mask)
+		wg.Wait()
+		return
+	}
+}
+
+func (h *Host) copyFile(cfg *config.Config, wg *sync.WaitGroup, src, dst, mask string) {
+	defer wg.Done()
+	sshConfig, err := getHostSSHConfig(cfg, h)
+	if err != nil {
+		h.IsSucceeded = false
+		h.Error = err.Error()
+		return
+	}
 	file, err := os.Open(src)
 	if err != nil {
+		h.IsSucceeded = false
 		h.Error = err.Error()
 		return
 	}
-
-	defer client.Close()
 	defer file.Close()
 
-	if filepath.Base(src) != filepath.Base(dst) {
-		h.Error = "basename of src and dst must be the same"
+	client := scp.NewClient(h.IP+":"+h.Port, sshConfig)
+	err = client.Connect()
+	if err != nil {
+		h.IsSucceeded = false
+		h.Error = err.Error()
 		return
 	}
+	defer client.Close()
+
 	err = client.CopyFromFile(*file, dst, mask)
 	if err != nil {
+		h.IsSucceeded = false
 		h.Error = err.Error()
 		return
 	}
 	h.IsSucceeded = true
-	h.Result = "OK"
+
+	return
+}
+
+func (h *Host) copyDir(cfg *config.Config, wg *sync.WaitGroup, src, dst, mask string) {
+	entries, err := ioutil.ReadDir(src)
+	if err != nil {
+		h.Error = err.Error()
+		return
+	}
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		fi, err := os.Stat(srcPath)
+		if err != nil {
+			h.Error = err.Error()
+			return
+		}
+
+		switch fi.Mode() & os.ModeType {
+		case os.ModeDir:
+			h.exec(cfg, fmt.Sprintf("mkdir -p %s;chmod %s %s", dstPath, mask, dstPath))
+			if h.Error != "" {
+				return
+			}
+			h.copyDir(cfg, wg, srcPath, dstPath, mask)
+			if h.Error != "" {
+				return
+			}
+		default:
+			wg.Add(1)
+			h.copyFile(cfg, wg, srcPath, dstPath, mask)
+		}
+	}
 }

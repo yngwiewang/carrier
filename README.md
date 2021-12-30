@@ -1,12 +1,12 @@
 # Carrier
 A command-line tool similar to Ansible ad-hoc mode, much more efficient, implemented in Go.
 
-Just a binary file, You don't need Python, don't need to install any software or libraries. One line of code to execute shell commands on thousands of hosts parallelly. Get results in real time.
+Just a binary file, You don't need Python, don't need to install any software or libraries. One line of code can use the power of all CPU cores to execute shell commands concurrently on thousands of hosts. Get results in real time.
 
 # Overview
 Carrier does:
-1. Execute shell commands on the remote hosts parallelly, display and record the results and time-consuming of the last execution.
-2. Copy local file to the remote hosts parallelly, record the result of the last execution.
+1. Execute shell commands on the remote hosts concurrently, display and record the results and time-consuming of the last execution.
+2. Copy local file/directory to the remote hosts concurrently, record the result of the last execution.
 3. Check the result of the last execution.
 4. Extract the last successful/Failed hosts.
 
@@ -18,7 +18,7 @@ Use `carrier -h` for more information about commands.
 
 2. Prepare a list of host, *host* is an example.
 
-3. Execute commands parallelly. It is best to check your shell commands by using `--dry-run` and test them on a few hosts first.
+3. Execute commands concurrently. It is best to check your shell commands by using `--dry-run` and test them on a few hosts first.
 ```sh
 $ ./carrier sh "echo -n 'hostname: ';hostname;echo -n 'cpu: ';cat /proc/cpuinfo |grep processor |wc -l;echo -n 'mem: ';cat /proc/meminfo |grep MemTotal |awk '{printf \"%d\n\", \$2/1024/1024}';echo -n 'disk: ';df -m|grep '/dev/'|grep -v tmpfs|awk '{sum+=\$2};END{printf \"%d\", sum/1024}'"
 192.168.220.120 OK      0.104s
@@ -65,7 +65,7 @@ $ ./carrier hosts -sfalse
 192.168.220.1,22,root,11111
 ```
 
-6. Copy local file to the remote hosts parallelly. In order to avoid mistakes, basename of src and dst must be the same.
+6. Copy local file to the remote hosts concurrently. If the path is a directory, carrier will copy directories recursively and each file in the directory will be transferred concurrently. In order to avoid mistakes, basename of src and dst must be the same.
 ```sh
 $ ./carrier cp -s /mnt/d/abc -d /root/test/abc -m 0644
 192.168.220.120 Failed  0.161s
