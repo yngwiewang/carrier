@@ -1,5 +1,5 @@
 # Carrier
-A command-line tool similar to Ansible ad-hoc mode, much more efficient, implemented in Go.
+A command-line tool similar to Ansible ad-hoc mode, much more efficient, implemented in Go. Only hosts with bash shell installed are supported.
 
 Just a binary file, You don't need Python, don't need to install any software or libraries. One line of code can use the power of all CPU cores to execute shell commands concurrently on thousands of hosts. Get results in real time.
 
@@ -21,21 +21,21 @@ Use `carrier -h` for more information about commands.
 3. Execute commands concurrently. It is best to check your shell commands by using `--dry-run` and test them on a few hosts first.
 ```sh
 $ ./carrier sh "echo -n 'hostname: ';hostname;echo -n 'cpu: ';cat /proc/cpuinfo |grep processor |wc -l;echo -n 'mem: ';cat /proc/meminfo |grep MemTotal |awk '{printf \"%d\n\", \$2/1024/1024}';echo -n 'disk: ';df -m|grep '/dev/'|grep -v tmpfs|awk '{sum+=\$2};END{printf \"%d\", sum/1024}'"
-192.168.220.120 OK      0.104s
+192.168.220.122 OK      139.7102ms
 ================================
-hostname: kb1
+hostname: kb3
 cpu: 2
 mem: 3
 disk: 17
 
-192.168.220.102 OK      0.146s
+192.168.220.102 OK      156.6899ms
 ================================
 hostname: docker
 cpu: 2
 mem: 3
 disk: 18
 
-192.168.220.1   Failed  1.003s
+192.168.220.1   Failed  1.0007601s
 ================================
 dial tcp 192.168.220.1:22: i/o timeout
 ```
@@ -43,21 +43,21 @@ dial tcp 192.168.220.1:22: i/o timeout
 4. Check the result of last execution, the format could be table or csv.
 ```sh
 $ ./carrier logs
-+-----------------+-----------+------------------+----------------------------------------+----------+
-| IP              | SUCCEEDED | RESULT           | ERROR                                  | DURATION |
-+-----------------+-----------+------------------+----------------------------------------+----------+
-| 192.168.220.102 | true      | hostname: docker |                                        |    0.146 |
-|                 |           | cpu: 2           |                                        |          |
-|                 |           | mem: 3           |                                        |          |
-|                 |           | disk: 18         |                                        |          |
-+-----------------+-----------+------------------+----------------------------------------+----------+
-| 192.168.220.120 | true      | hostname: kb1    |                                        |    0.104 |
-|                 |           | cpu: 2           |                                        |          |
-|                 |           | mem: 3           |                                        |          |
-|                 |           | disk: 17         |                                        |          |
-+-----------------+-----------+------------------+----------------------------------------+----------+
-| 192.168.220.1   | false     |                  | dial tcp 192.168.220.1:22: i/o timeout |    1.003 |
-+-----------------+-----------+------------------+----------------------------------------+----------+
++----+-----------------+-----------+------------------+--------+----------------------------------------+------------+
+| SN | IP              | SUCCEEDED | STDOUT           | STDERR | ERROR                                  |   DURATION |
++----+-----------------+-----------+------------------+--------+----------------------------------------+------------+
+|  1 | 192.168.220.102 | true      | hostname: docker |        |                                        | 156.6899ms |
+|    |                 |           | cpu: 2           |        |                                        |            |
+|    |                 |           | mem: 3           |        |                                        |            |
+|    |                 |           | disk: 18         |        |                                        |            |
++----+-----------------+-----------+------------------+--------+----------------------------------------+------------+
+|  2 | 192.168.220.122 | true      | hostname: kb3    |        |                                        | 139.7102ms |
+|    |                 |           | cpu: 2           |        |                                        |            |
+|    |                 |           | mem: 3           |        |                                        |            |
+|    |                 |           | disk: 17         |        |                                        |            |
++----+-----------------+-----------+------------------+--------+----------------------------------------+------------+
+|  3 | 192.168.220.1   | false     |                  |        | dial tcp 192.168.220.1:22: i/o timeout | 1.0007601s |
++----+-----------------+-----------+------------------+--------+----------------------------------------+------------+
 ```
 5. Extract the last successful/Failed hosts, you can redirect the result to a temp file and make further processing.
 ```sh
@@ -67,15 +67,12 @@ $ ./carrier hosts -sfalse
 
 6. Copy local file to the remote hosts concurrently. If the path is a directory, carrier will copy directories recursively and each file in the directory will be transferred concurrently. In order to avoid mistakes, basename of src and dst must be the same.
 ```sh
-$ ./carrier cp -s /mnt/d/abc -d /root/test/abc -m 0644
-192.168.220.120 Failed  0.161s
+$ ./carrier cp -s /mnt/d/scp -d /root/scp -m 0644
+192.168.220.122 OK      1.0064326s
 ================================
-scp: /root/test/abc: No such file or directory
 
-
-192.168.220.102 OK      0.221s
+192.168.220.102 OK      1.6755888s
 ================================
-OK
 ```
 
 # Benchmark

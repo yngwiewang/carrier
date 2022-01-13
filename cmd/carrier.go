@@ -78,31 +78,35 @@ var logsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		sn := 1
 		if logOutput == "table" {
 			t := table.NewWriter()
 			t.SetOutputMirror(os.Stdout)
-			t.AppendHeader(table.Row{"ip", "succeeded", "result", "error", "duration"})
+			t.AppendHeader(table.Row{"sn", "ip", "succeeded", "stdout", "stderr", "error", "duration"})
 			for _, h := range hosts {
-				if succeeded == "true" && !h.IsSucceeded {
+				if succeeded == "true" && !h.Succeed {
 					continue
 				}
-				if succeeded == "false" && h.IsSucceeded {
+				if succeeded == "false" && h.Succeed {
 					continue
 				}
-				t.AppendRow([]interface{}{h.IP, h.IsSucceeded, h.Result, h.Error, h.ExecDuration})
+				t.AppendRow([]interface{}{sn, h.IP, h.Succeed, h.Stdout, h.Stderr, h.Error, h.ExecDuration})
 				t.AppendSeparator()
+				sn++
 			}
 			t.Render()
 		} else {
-			fmt.Println("ip", "succeeded", "result", "error", "duration")
+			fmt.Println("sn,ip,succeeded,stdout,stderr,error,duration")
 			for _, h := range hosts {
-				if succeeded == "true" && !h.IsSucceeded {
+				if succeeded == "true" && !h.Succeed {
 					continue
 				}
-				if succeeded == "false" && h.IsSucceeded {
+				if succeeded == "false" && h.Succeed {
 					continue
 				}
-				fmt.Printf("%s,%t,%s,%s,%v\n", h.IP, h.IsSucceeded, h.Result, h.Error, h.ExecDuration)
+				fmt.Printf("%d,%s,%t,%s,%s,%s,%s\n",
+					sn, h.IP, h.Succeed, h.Stdout, h.Stderr, h.Error, h.ExecDuration)
+				sn++
 			}
 		}
 		return nil
@@ -118,10 +122,10 @@ var hostsCmd = &cobra.Command{
 			return err
 		}
 		for _, h := range hosts {
-			if succeeded == "true" && !h.IsSucceeded {
+			if succeeded == "true" && !h.Succeed {
 				continue
 			}
-			if succeeded == "false" && h.IsSucceeded {
+			if succeeded == "false" && h.Succeed {
 				continue
 			}
 			fmt.Printf("%s,%s,%s,%s\n", h.IP, h.Port, h.Username, h.Password)

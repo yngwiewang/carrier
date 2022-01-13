@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,9 +24,11 @@ type Host struct {
 	Port         string
 	Username     string
 	Password     string
-	IsSucceeded  bool
+	Succeed      bool
 	Result       string
-	ExecDuration float64
+	Stdout       string
+	Stderr       string
+	ExecDuration time.Duration
 	Error        string
 }
 
@@ -37,6 +37,8 @@ type Hosts struct {
 	HostCh    chan *Host
 }
 
+// SaveGob serialize the result of the last execution to a gob file
+// and save it in /tmp/carrier_record.
 func (hs *Hosts) SaveGob() error {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
@@ -44,7 +46,7 @@ func (hs *Hosts) SaveGob() error {
 	if err := enc.Encode(hs.HostSlice); err != nil {
 		return err
 	}
-	f, err := os.Create("record")
+	f, err := os.Create("/tmp/carrier_record")
 	if err != nil && err != os.ErrExist {
 		return err
 	}
@@ -56,10 +58,11 @@ func (hs *Hosts) SaveGob() error {
 	return nil
 }
 
+// LoadGob read the gob file /tmp/carrier_record and deserialize it to []*Host.
 func LoadGob() ([]*Host, error) {
-	f, err := os.Open("record")
+	f, err := os.Open("/tmp/carrier_record")
 	if err != nil {
-		return nil, err
+		return nil, errors.New("open /tmp/carrier_record: no such file or directory")
 	}
 	var hs []*Host
 	dec := gob.NewDecoder(f)
@@ -69,11 +72,12 @@ func LoadGob() ([]*Host, error) {
 	return hs, nil
 }
 
-// GetHosts read the csv file and parse Hosts.
+// GetHosts read the csv file and parse it's content to []*Host then init a *Hosts.
 // Empty lines and lines starts with '#' will be ignored.
 // The first column is remote ip, the second column is ssh port,
 // the third column is ssh username(default is root), the forth column is password.
-// The csv file must has at least the first column.
+// The csv file must has at least the first column, then the default value of port
+// and username will be 22 and root.
 func GetHosts(fileName string) (*Hosts, error) {
 	var hosts []*Host
 	f, err := os.Open(fileName)
@@ -110,7 +114,7 @@ func GetHosts(fileName string) (*Hosts, error) {
 	return &Hosts{hosts, make(chan *Host)}, nil
 }
 
-// ExecuteSSH parallel execute ssh command on remote hosts.
+// ExecuteSSH concurrently execute ssh command on remote hosts and print result.
 func (hosts *Hosts) ExecuteSSH(cfg *config.Config, cmd string) {
 	var wg sync.WaitGroup
 	wg.Add(len(hosts.HostSlice))
@@ -124,14 +128,14 @@ func (hosts *Hosts) ExecuteSSH(cfg *config.Config, cmd string) {
 		go func(h *Host, cmd string) {
 			start := time.Now()
 			h.exec(cfg, cmd)
-			h.ExecDuration = math.Ceil(time.Since(start).Seconds()*1000) / 1000
+			h.ExecDuration = time.Since(start)
 			hosts.HostCh <- h
 			wg.Done()
 		}(h, cmd)
 	}
 }
 
-// ExecuteSSH parallel execute ssh command on remote hosts.
+// ExecuteSCP concurrently copy file/directory to remote hosts.
 func (hosts *Hosts) ExecuteSCP(cfg *config.Config, src, dst, mask string) error {
 	if src == "" || dst == "" {
 		return errors.New("must specify src and dst")
@@ -148,7 +152,7 @@ func (hosts *Hosts) ExecuteSCP(cfg *config.Config, src, dst, mask string) error 
 		go func(h *Host, src, dst, mask string) {
 			start := time.Now()
 			h.copy(cfg, src, dst, mask)
-			h.ExecDuration = math.Ceil(time.Since(start).Seconds()*1000) / 1000
+			h.ExecDuration = time.Since(start)
 			hosts.HostCh <- h
 			wg.Done()
 		}(h, src, dst, mask)
@@ -156,6 +160,8 @@ func (hosts *Hosts) ExecuteSCP(cfg *config.Config, src, dst, mask string) error 
 	return nil
 }
 
+// PrintResult fetch the executed hosts from channel and print their results.
+// The results will be printed immediately after execution.
 func (hosts Hosts) PrintResult() {
 	for h := range hosts.HostCh {
 		h.print()
@@ -164,59 +170,23 @@ func (hosts Hosts) PrintResult() {
 
 func (h *Host) print() {
 	var state string
-	if h.IsSucceeded {
+	if h.Succeed {
 		state = color.Green("OK")
 	} else {
 		state = color.Red("Failed ")
 	}
-	fmt.Printf("%-26s %-18s %.3fs\n", color.Yellow(h.IP), state, h.ExecDuration)
+	fmt.Printf("%-26s %-18s %s\n", color.Yellow(h.IP), state, h.ExecDuration)
 	fmt.Println("================================")
-	if len(h.Result) > 0 {
-		fmt.Println(h.Result)
+	if len(h.Stdout) > 0 {
+		fmt.Println(h.Stdout)
+	}
+	if len(h.Stderr) > 0 {
+		fmt.Println(h.Stderr)
 	}
 	if len(h.Error) > 0 {
 		fmt.Println(h.Error)
 	}
 	fmt.Println()
-}
-
-// Conn wraps a net.Conn, and sets a deadline for every read
-// and write operation.
-type Conn struct {
-	net.Conn
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-}
-
-func (c *Conn) Read(b []byte) (int, error) {
-	err := c.Conn.SetReadDeadline(time.Now().Add(c.ReadTimeout))
-	if err != nil {
-		return 0, err
-	}
-	return c.Conn.Read(b)
-}
-
-func (c *Conn) Write(b []byte) (int, error) {
-	err := c.Conn.SetWriteDeadline(time.Now().Add(c.WriteTimeout))
-	if err != nil {
-		return 0, err
-	}
-	return c.Conn.Write(b)
-}
-
-func sshDialTimeout(network, addr string, config *ssh.ClientConfig, timeout time.Duration) (*ssh.Client, error) {
-	conn, err := net.DialTimeout(network, addr, timeout)
-	if err != nil {
-		return nil, err
-	}
-
-	timeoutConn := &Conn{conn, timeout, timeout}
-	c, chans, reqs, err := ssh.NewClientConn(timeoutConn, addr, config)
-	if err != nil {
-		return nil, err
-	}
-	client := ssh.NewClient(c, chans, reqs)
-	return client, nil
 }
 
 func getHostSSHConfig(cfg *config.Config, h *Host) (*ssh.ClientConfig, error) {
@@ -272,15 +242,20 @@ func (h *Host) exec(cfg *config.Config, cmd string) {
 		h.Error = err.Error()
 		return
 	}
+	stdoutPipe, _ := session.StdoutPipe()
+	stderrPipe, _ := session.StderrPipe()
 	defer session.Close()
 
-	res, err := session.CombinedOutput(cmd)
-	h.Result = strings.TrimSpace(string(res))
+	err = session.Run(cmd)
 	if err != nil {
 		h.Error = err.Error()
-		return
 	}
-	h.IsSucceeded = true
+	stdout, _ := ioutil.ReadAll(stdoutPipe)
+	h.Stdout = strings.TrimSpace(string(stdout))
+	stderr, _ := ioutil.ReadAll(stderrPipe)
+	h.Stderr = strings.TrimSpace(string(stderr))
+
+	h.Succeed = true
 }
 
 func (h *Host) copy(cfg *config.Config, src, dst, mask string) {
@@ -301,7 +276,7 @@ func (h *Host) copy(cfg *config.Config, src, dst, mask string) {
 		wg.Add(1)
 		h.copyFile(cfg, &wg, src, dst, mask)
 		return
-		// scp a directory
+	// scp a directory
 	case mode.IsDir():
 		h.exec(cfg, fmt.Sprintf("mkdir -p %s;chmod %s %s", dst, mask, dst))
 		if h.Error != "" {
@@ -317,13 +292,14 @@ func (h *Host) copyFile(cfg *config.Config, wg *sync.WaitGroup, src, dst, mask s
 	defer wg.Done()
 	sshConfig, err := getHostSSHConfig(cfg, h)
 	if err != nil {
-		h.IsSucceeded = false
+		// If copying a directory, the "Succeed" flag will be True if "mkdir" succeed.
+		h.Succeed = false
 		h.Error = err.Error()
 		return
 	}
 	file, err := os.Open(src)
 	if err != nil {
-		h.IsSucceeded = false
+		h.Succeed = false
 		h.Error = err.Error()
 		return
 	}
@@ -332,7 +308,7 @@ func (h *Host) copyFile(cfg *config.Config, wg *sync.WaitGroup, src, dst, mask s
 	client := scp.NewClient(h.IP+":"+h.Port, sshConfig)
 	err = client.Connect()
 	if err != nil {
-		h.IsSucceeded = false
+		h.Succeed = false
 		h.Error = err.Error()
 		return
 	}
@@ -340,11 +316,11 @@ func (h *Host) copyFile(cfg *config.Config, wg *sync.WaitGroup, src, dst, mask s
 
 	err = client.CopyFromFile(*file, dst, mask)
 	if err != nil {
-		h.IsSucceeded = false
+		h.Succeed = false
 		h.Error = err.Error()
 		return
 	}
-	h.IsSucceeded = true
+	h.Succeed = true
 
 	return
 }
