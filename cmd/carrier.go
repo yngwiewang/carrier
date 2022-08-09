@@ -165,8 +165,6 @@ func init() {
 	copyCmd.Flags().StringVarP(&src, "src", "s", "", "source file on local host")
 	copyCmd.Flags().StringVarP(&dst, "dst", "d", "", "destination file on remote hosts")
 	copyCmd.Flags().StringVarP(&mask, "mask", "m", "0755", "mask code of destination file(default is 0755)")
-	_ = copyCmd.MarkFlagRequired("source")
-	_ = copyCmd.MarkFlagRequired("destination")
 
 	cobra.OnInitialize(initConfig)
 	rootCmd.AddCommand(execCmd)

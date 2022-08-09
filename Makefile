@@ -1,5 +1,5 @@
 build:
-	go build cmd/carrier.go
+	go build -ldflags="-s -w" -o carrier cmd/carrier.go
 
 install:
-	go install cmd/carrier.go
+	go install -ldflags="-s -w" cmd/carrier.go

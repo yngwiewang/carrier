@@ -2,7 +2,6 @@ package host
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -38,31 +37,26 @@ type Hosts struct {
 }
 
 // SaveGob serialize the result of the last execution to a gob file
-// and save it in /tmp/carrier_record.
+// and save it in /tmp/carrier_log.
 func (hs *Hosts) SaveGob() error {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-
-	if err := enc.Encode(hs.HostSlice); err != nil {
-		return err
-	}
-	f, err := os.Create("/tmp/carrier_record")
+	f, err := os.Create("/tmp/carrier_log")
 	if err != nil && err != os.ErrExist {
 		return err
 	}
-	w := bufio.NewWriter(f)
-	if _, err := w.Write(buf.Bytes()); err != nil {
+	defer f.Close()
+	enc := gob.NewEncoder(f)
+	if err := enc.Encode(hs.HostSlice); err != nil {
 		return err
 	}
-	w.Flush()
 	return nil
 }
 
-// LoadGob read the gob file /tmp/carrier_record and deserialize it to []*Host.
+// LoadGob read the gob file /tmp/carrier_log and deserialize it to []*Host.
 func LoadGob() ([]*Host, error) {
-	f, err := os.Open("/tmp/carrier_record")
+	f, err := os.Open("/tmp/carrier_log")
+	defer f.Close()
 	if err != nil {
-		return nil, errors.New("open /tmp/carrier_record: no such file or directory")
+		return nil, errors.New("open /tmp/carrier_log: no such file or directory")
 	}
 	var hs []*Host
 	dec := gob.NewDecoder(f)
@@ -111,7 +105,7 @@ func GetHosts(fileName string) (*Hosts, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	return &Hosts{hosts, make(chan *Host)}, nil
+	return &Hosts{hosts, make(chan *Host, 0)}, nil
 }
 
 // ExecuteSSH concurrently execute ssh command on remote hosts and print result.
@@ -126,11 +120,11 @@ func (hosts *Hosts) ExecuteSSH(cfg *config.Config, cmd string) {
 
 	for _, h := range hosts.HostSlice {
 		go func(h *Host, cmd string) {
+			defer wg.Done()
 			start := time.Now()
 			h.exec(cfg, cmd)
 			h.ExecDuration = time.Since(start)
 			hosts.HostCh <- h
-			wg.Done()
 		}(h, cmd)
 	}
 }
@@ -150,11 +144,11 @@ func (hosts *Hosts) ExecuteSCP(cfg *config.Config, src, dst, mask string) error 
 
 	for _, h := range hosts.HostSlice {
 		go func(h *Host, src, dst, mask string) {
+			defer wg.Done()
 			start := time.Now()
 			h.copy(cfg, src, dst, mask)
 			h.ExecDuration = time.Since(start)
 			hosts.HostCh <- h
-			wg.Done()
 		}(h, src, dst, mask)
 	}
 	return nil
