@@ -2,6 +2,8 @@ package config
 
 import (
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -19,6 +21,13 @@ type Config struct {
 
 // NewConfig parse config file to config instance.
 func NewConfig(cfgFile string) (*Config, error) {
+	if cfgFile == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		cfgFile = filepath.Join(homeDir, "carrier.yml")
+	}
 	content, err := ioutil.ReadFile(cfgFile)
 	if err != nil {
 		return nil, err
