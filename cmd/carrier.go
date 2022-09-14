@@ -154,7 +154,7 @@ var copyCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "carrier.yml", "config file")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file(default ~/carrier.yml)")
 	rootCmd.PersistentFlags().StringVarP(&hostsFileName, "inventory", "i", "", "remote host list to read from (default value in config file)")
 	rootCmd.PersistentFlags().StringVarP(&authMode, "auth-mode", "a", "", "remote hosts' ssh authentication mode, could be password or key(default value in config file)")
 	execCmd.Flags().DurationVarP(&executeTimeout, "timeout", "t", 0*time.Second, "timeout to execute remote shell(default value in config file)")
